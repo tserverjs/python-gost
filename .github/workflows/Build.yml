@@ -3,11 +3,11 @@ name: Build and Release Binary
 on:
   push:
     tags:
-      - 'v*'  # 依然支持传统的 git tag 触发
-  workflow_dispatch: # 允许在 GitHub 网页端手动触发
+      - 'v*'
+  workflow_dispatch:
     inputs:
       tag_name:
-        description: 'v1.0.0'
+        description: '请输入版本号 (例如 v1.0.0)'
         required: true
         default: 'v1.0.0'
 
@@ -15,7 +15,7 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 赋予写入 Release 的权限
+      contents: write
 
     steps:
       - name: Checkout Code
@@ -30,8 +30,11 @@ jobs:
       # 2. 使用 Bun 编译成独立的二进制文件
       - name: Compile to Standalone Binary
         run: |
+          echo "=== 正在编译 ==="
           bun build --compile ./index.ts --outfile web
           chmod +x web
+          echo "=== 检查编译产物 ==="
+          ls -la web
 
       # 3. 如果是网页端手动触发，使用输入的版本号创建 Release 并上传
       - name: Release (Manual Dispatch)
@@ -40,7 +43,8 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
           name: Release ${{ github.event.inputs.tag_name }}
-          files: web
+          files: |
+            web
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -49,6 +53,7 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: web
+          files: |
+            web
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
