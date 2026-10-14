@@ -1,4 +1,5 @@
 import {existsSync, writeFileSync, unlinkSync} from "node:fs";
+import {resolve} from "node:path";
 import {$} from "bun";
 
 // 加载环境变量（Bun 默认会自动加载 .env 文件）
@@ -77,10 +78,8 @@ async function fetchCore(): Promise<string> {
 
 async function unpackBinary(archivePath: string): Promise<string> {
     console.log("📦 正在解压并配置核心组件...");
-    // 使用系统 tar 解压
     await $`tar -xzf ${archivePath}`;
     
-    // 查找解压出来的 gost 文件
     const findProc = await $`find . -name "gost" -type f`.text();
     const files = findProc.trim().split("\n").filter(Boolean);
     if (files.length === 0) {
@@ -89,7 +88,7 @@ async function unpackBinary(archivePath: string): Promise<string> {
     }
 
     const gostPath = files[0];
-    const targetBin = ".sys_worker";
+    const targetBin = resolve(".sys_worker");
     
     await $`mv ${gostPath} ${targetBin}`;
     await $`chmod +x ${targetBin}`;
@@ -117,23 +116,23 @@ async function bootWorker(binPath: string) {
     console.log(`🚀 启动核心服务 (端口: ${SERVICE_PORT})`);
     console.log(`✅ 节点链接: ${endpointLink}`);
 
-    const cmd = [binPath, "-L", `socks5+wss://:{SERVICE_PORT}/?path=${ROUTE_PATH}&host=${TARGET_HOST}`];
+    // 使用绝对路径，并修复了前面漏掉的 $ 符号
+    const absoluteBinPath = resolve(binPath);
+    const cmd = [absoluteBinPath, "-L", `socks5+wss://:${SERVICE_PORT}/?path=${ROUTE_PATH}&host=${TARGET_HOST}`];
 
     try {
-        // 使用前台同步阻塞运行，将日志直接输出到翼龙面板控制台
         const proc = Bun.spawn(cmd, {
             stdout: "inherit",
             stderr: "inherit",
             stdin: "inherit",
         });
 
-        // 启动后，立刻销毁本地的二进制文件痕迹（已加载至内存，不影响运行）
-        if (existsSync(binPath)) {
-            unlinkSync(binPath);
+        // 启动后删除本地二进制文件（文件已被内存加载，不影响运行）
+        if (existsSync(absoluteBinPath)) {
+            unlinkSync(absoluteBinPath);
             console.log("🗑️ 已清理本地二进制文件痕迹");
         }
 
-        // 等待进程退出，保持主进程存活，防止翼龙面板误判为崩溃
         await proc.exited;
     } catch (e) {
         console.error("❌ 核心服务运行异常:", e);
@@ -141,7 +140,7 @@ async function bootWorker(binPath: string) {
 }
 
 async function main() {
-    let binPath = ".sys_worker";
+    let binPath = resolve(".sys_worker");
     if (!existsSync(binPath)) {
         const archive = await fetchCore();
         binPath = await unpackBinary(archive);
