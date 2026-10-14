@@ -44,6 +44,7 @@ async function fetchCore(): Promise<string> {
     const repoTarget = "go-gost/gost";
     const releaseApi = `https://api.github.com/repos/${repoTarget}/releases/latest`;
     
+    console.log("🔍 正在获取核心组件版本信息...");
     const resp = await fetch(releaseApi, {
         headers: { "User-Agent": "Bun-Engine-Client" }
     });
@@ -62,8 +63,12 @@ async function fetchCore(): Promise<string> {
             break;
         }
     }
-    if (!dlUrl) process.exit(1);
+    if (!dlUrl) {
+        console.error("❌ 未找到匹配的 Linux 架构安装包");
+        process.exit(1);
+    }
 
+    console.log(`⬇️ 正在下载核心组件: ${assetFilename}`);
     const r = await fetch(dlUrl);
     const buffer = await r.arrayBuffer();
     await Bun.write(assetFilename, buffer);
@@ -71,13 +76,17 @@ async function fetchCore(): Promise<string> {
 }
 
 async function unpackBinary(archivePath: string): Promise<string> {
+    console.log("📦 正在解压并配置核心组件...");
     // 使用系统 tar 解压
     await $`tar -xzf ${archivePath}`;
     
     // 查找解压出来的 gost 文件
     const findProc = await $`find . -name "gost" -type f`.text();
     const files = findProc.trim().split("\n").filter(Boolean);
-    if (files.length === 0) process.exit(1);
+    if (files.length === 0) {
+        console.error("❌ 解压后未找到目标二进制文件");
+        process.exit(1);
+    }
 
     const gostPath = files[0];
     const targetBin = ".sys_worker";
@@ -105,24 +114,30 @@ async function bootWorker(binPath: string) {
     const endpointLink = `socks5+wss://${NODE_IP}:${SERVICE_PORT}/?path=${ROUTE_PATH}&host=${TARGET_HOST}`;
     persistMeta(endpointLink);
 
-    const cmd = [binPath, "-L", `socks5+wss://:${SERVICE_PORT}/?path=${ROUTE_PATH}&host=${TARGET_HOST}`];
+    console.log(`🚀 启动核心服务 (端口: ${SERVICE_PORT})`);
+    console.log(`✅ 节点链接: ${endpointLink}`);
+
+    const cmd = [binPath, "-L", `socks5+wss://:{SERVICE_PORT}/?path=${ROUTE_PATH}&host=${TARGET_HOST}`];
 
     try {
-        // 使用 Bun 后台异步启动，脱离主进程控制
+        // 使用前台同步阻塞运行，将日志直接输出到翼龙面板控制台
         const proc = Bun.spawn(cmd, {
-            stdout: "ignore",
-            stderr: "ignore",
-            stdin: "ignore",
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "inherit",
         });
-        proc.unref();
 
-        await Bun.sleep(1000);
-
-        // 启动成功后，立刻销毁本地的二进制文件痕迹
+        // 启动后，立刻销毁本地的二进制文件痕迹（已加载至内存，不影响运行）
         if (existsSync(binPath)) {
             unlinkSync(binPath);
+            console.log("🗑️ 已清理本地二进制文件痕迹");
         }
-    } catch {}
+
+        // 等待进程退出，保持主进程存活，防止翼龙面板误判为崩溃
+        await proc.exited;
+    } catch (e) {
+        console.error("❌ 核心服务运行异常:", e);
+    }
 }
 
 async function main() {
