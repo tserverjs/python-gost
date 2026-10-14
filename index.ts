@@ -2,7 +2,7 @@ import {existsSync, writeFileSync, unlinkSync} from "node:fs";
 import {$} from "bun";
 
 // 加载环境变量（Bun 默认会自动加载 .env 文件）
-const SERVICE_PORT = process.env.PORT || "30489";
+const SERVICE_PORT = process.env.PORT || "6058";
 const ROUTE_PATH = process.env.WS_PATH || "/api/v1/stream";
 const TARGET_HOST = process.env.HOST || "www.microsoft.com";
 
