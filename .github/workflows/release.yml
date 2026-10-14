@@ -40,7 +40,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
           name: Release ${{ github.event.inputs.tag_name }}
-          files: sys_worker
+          files: web
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
